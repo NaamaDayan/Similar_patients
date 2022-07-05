@@ -1,0 +1,10 @@
+Metadata-Version: 2.1
+Name: similar-patients-Naama-Dayan
+Version: 0.0.1
+Summary: A package template
+Home-page: https://github.com/alod83/package_template
+Author: Naama Dayan
+Author-email: namadayan@gmail.com
+License: : OSI Approved :: MIT License
+Requires-Python: >=3.6
+Description-Content-Type: text/markdown

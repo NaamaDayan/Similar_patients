@@ -1,27 +1,27 @@
-import numpy as np
-import matplotlib.pyplot as plt
-import pandas as pd
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.feature_extraction.text import TfidfVectorizer
-import numpy as np
-from scipy.spatial import distance
-from sklearn.metrics.pairwise import linear_kernel
-from typing import List, Set
-import warnings
-from fastdtw import fastdtw
-from scipy.spatial.distance import euclidean
 import math
 from collections import Counter
+from typing import List
+
+import numpy as np
+import pandas as pd
+from scipy.spatial import distance
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import linear_kernel
+from sklearn.preprocessing import MinMaxScaler
+
+from src.similarity_package.configs import Feature, FeatureType, DataSource
 
 
 class SimilarityCalculator:
 
-    def __init__(self, patients_df: pd.DataFrame):
+    def __init__(self, patients_df: pd.DataFrame, data_sources: List[DataSource]):
         self.patients_df = patients_df
         self.numerical_features = []
         self.categorical_features = []
         self.text_features = []
         self.lst_features = []
+        self.features: List[Feature] = []
+        self.data_sources = data_sources
 
     def get_column_values_chronologically(self, patient_df: pd.DataFrame, col: str, date_col: str):
         self.sort_df(patient_df, date_col=date_col)
@@ -59,7 +59,7 @@ class SimilarityCalculator:
         tfidf_matrix = vectorizer.fit_transform(texts)
         return linear_kernel(tfidf_matrix[0:1], tfidf_matrix).flatten()
 
-    def calculate_ranked_similarity(self, feature_scores: pd.DataFrame) -> pd.DataFrame:
+    def calculate_ranked_distances(self, feature_scores: pd.DataFrame) -> pd.DataFrame:
         """This function calculates similarity score for every patient in other_patients,
            and returns the original patients_df with a new sorted column of distance.
            Higher similarity means that the patient is closer to the examined patient.
@@ -67,19 +67,21 @@ class SimilarityCalculator:
            For example, if text_factor = 0.1 (10%), it means that the other features are 10 times more important.
         """
         patient_info = feature_scores.iloc[0].values
-        other_patients = feature_scores.iloc[1:]
-        distances = distance.cdist([patient_info], other_patients.values, "cosine")[0]
-        original_other_patients = self.patients_df.iloc[1:]
-        original_other_patients.loc[original_other_patients.index, 'features_similarity'] = 1 / distances
-        original_other_patients.loc[
-            original_other_patients.index, 'features_similarity'] = MinMaxScaler().fit_transform(
-            original_other_patients[['features_similarity']])
+        other_patients = feature_scores
+        original_other_patients = self.patients_df
+        original_other_patients['distance'] = distance.cdist([patient_info], other_patients.values, "cosine")[0]
 
-        return original_other_patients.sort_values('features_similarity', ascending=False)
+        original_other_patients['distance'] = MinMaxScaler().fit_transform(
+            original_other_patients[['distance']])
+        # tsne = TSNE(n_components=2, verbose=1, perplexity=40, n_iter=300)
+        # tsne_results = tsne.fit_transform(feature_scores)
+
+        return original_other_patients.sort_values('distance', ascending=True)
 
     def add_diagnoses_features(self, diagnoses_df: pd.DataFrame):
         self.patients_df['diagnoses'] = diagnoses_df.groupby('ID').apply(
             lambda df: self.get_column_values_chronologically(df, 'Diagnosis', 'DiagnosisDate'))
+        # self.features.append(Feature('diagnoses', FeatureType.LST, self.data_sources['Diagnoses']))
 
     def add_test_results_features(self, lab_tests_df: pd.DataFrame):
         self.patients_df['lab_test_names'] = lab_tests_df.groupby('ID').apply(
@@ -94,8 +96,7 @@ class SimilarityCalculator:
             lambda df: self.get_pair_column_values_chronologically(df, 'DrugName', 'ExecutionStatus', 'OrderStartDate'))
 
     def _split_columns_by_type(self):
-        self.numerical_features = self.patients_df.select_dtypes(
-            np.number).columns  # TODO:: maybe have default and suggest columns
+        self.numerical_features = self.patients_df.select_dtypes(np.number).columns
         self.text_features = list(
             self.patients_df.columns[self.patients_df.applymap(lambda x: isinstance(x, str)).all(0)])
         self.lst_features = list(
@@ -111,8 +112,8 @@ class SimilarityCalculator:
         transformed_df = self.patients_df[self.numerical_features].copy()
         transformed_df = pd.get_dummies(self.patients_df[self.categorical_features]) if len(
             self.categorical_features) > 0 else transformed_df
-        transformed_df[self.numerical_features] = scaler.fit_transform(self.patients_df[self.numerical_features])
-
+        # transformed_df[self.numerical_features] = scaler.fit_transform(self.patients_df[self.numerical_features])
+        # {data_source: (feature, type)}
         for feature in self.lst_features:
             transformed_df[feature] = self.patients_df[feature].apply(
                 lambda patient_results: self.calc_similarity_lst_features(patient_results,
@@ -127,29 +128,13 @@ class SimilarityCalculator:
 
         return transformed_df
 
-
-if __name__ == '__main__':
-    name = 'קבוצה 1.xlsx'
-
-    diagnoses_df = pd.read_excel(f'/home/naama/Downloads/{name}', sheet_name='קבוצה 1 - פרטים ואבחנות')
-    lab_tests_df = pd.read_excel(f'/home/naama/Downloads/{name}', sheet_name='קבוצה 1 - בדיקות מעבדה')
-    drugs_df = pd.read_excel(f'/home/naama/Downloads/{name}', sheet_name='קבוצה 1 - תרופות')
-
-    patients_df = diagnoses_df.groupby('ID').mean('birth_year')
-    patients_df['text'] = ['The patient is healthy but has penuts alergy',
-                           'patient is very healthy and have penuts alergy', 'Unsimilar Text', 'Unsimilar Text alergy',
-                           'Unsimilar Text patient alergy', 'Unsimilar Text', 'Unsimilar Text']
-
-    sc = SimilarityCalculator(patients_df)
-    sc.add_diagnoses_features(diagnoses_df)
-    sc.add_test_results_features(lab_tests_df)
-    sc.add_drugs_features(drugs_df)
-
-    feature_scores = sc.calculate_similarity_per_feature()
-
-    sc.calculate_ranked_similarity(feature_scores)
-
-    # from pandas_profiling import ProfileReport
-    #
-    # prof = ProfileReport(patients_df)
-    # prof.to_file(output_file='output.html')
+# if __name__ == '__main__':
+#     name = 'קבוצה 1.xlsx'
+#
+#     sc = SimilarityCalculator(patients_df)
+#     sc.rnu
+#
+#     # from pandas_profiling import ProfileReport
+#     #
+#     # prof = ProfileReport(patients_df)
+#     # prof.to_file(output_file='output.html')

@@ -1,0 +1,8 @@
+
+.idea/
+
+dist/
+
+src/similarity_package/dashboard/first_page/__pycache__/
+
+src/similarity_package/__pycache__/
