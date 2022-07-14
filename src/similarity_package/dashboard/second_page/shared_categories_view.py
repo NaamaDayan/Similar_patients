@@ -36,7 +36,7 @@ def get_rare_categories(data: pd.DataFrame, frequency_factor: float, col_name: s
     rank_percentile_threshold = np.percentile(category_rank['rank'].values, frequency_factor)
 
     return category_rank[category_rank['rank'] <= rank_percentile_threshold][col_name].values
-
+    
 
 def get_shared_categories(sheet_name: str, col_name: str, group_num: int, frequency_factor: int = 10):
     data = get_df_by_sheet_name(group_num, sheet_name)
@@ -71,7 +71,7 @@ def create_agg_df_div(table_name: str, col_name: str, sheet_name: str, group_num
                               html.Div(dash_table.DataTable(
                                   df.to_dict('records'), [{"name": i, "id": i} for i in df.columns],
                                   id=f'{table_name}_shared_table',
-                                  style_cell={
+                                      style_cell={
                                       'overflow': 'hidden',
                                       'textOverflow': 'ellipsis',
                                       'maxWidth': 0

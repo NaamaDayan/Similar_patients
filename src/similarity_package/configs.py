@@ -23,8 +23,8 @@ SHADOW_STYLE = {'box-shadow': '0px 5px 10px 0px rgba(0, 0, 0, 0.5)',
                 }
 
 MARGIN_STYLE = {'margin-top': '10px',
-                'margin-right': '10px',
-                'margin-left': '10px',
+                'margin-right': '12px',
+                'margin-left': '12px',
                 'align': 'center'
                 }
 

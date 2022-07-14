@@ -4,11 +4,13 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import LabelEncoder
 
 from src.similarity_package.configs import DIAGNOSES_SHEET_NAME, LAB_RESULTS_SHEET_NAME, DRUGS_SHEET_NAME, DataSource
+from src.similarity_package.data_sources import Diagnosis, Drugs, LabResult
 from src.similarity_package.similarity_calculator import SimilarityCalculator
 
 
 def get_distance_score_by_group(group_num: int, feature_weight_diagnosis: float, feature_weight_lab_result: float,
-                                feature_weight_drugs: float):
+                                feature_weight_drugs: float, max_similar_patients: int):
+
     df_name = f'/home/naama/Downloads/group_{str(group_num)}.xlsx'
     diagnoses_df = pd.read_excel(df_name, sheet_name=DIAGNOSES_SHEET_NAME)
     lab_tests_df = pd.read_excel(df_name, sheet_name=LAB_RESULTS_SHEET_NAME)
@@ -19,18 +21,19 @@ def get_distance_score_by_group(group_num: int, feature_weight_diagnosis: float,
     #                        'patient is very healthy and have penuts alergy', 'Unsimilar Text', 'Unsimilar Text alergy',
     #                        'Unsimilar Text patient alergy', 'Unsimilar Text', 'Unsimilar Text', 'Unsimilar Text', 'Unsimilar Text'][:len(patients_df)]
 
-    data_sources = [DataSource('Diagnosis', diagnoses_df, feature_weight_diagnosis),
-                    DataSource('Test Results', lab_tests_df, feature_weight_lab_result),
-                    DataSource('Drugs', drugs_df, feature_weight_drugs),
-                    ]
-    sc = SimilarityCalculator(patients_df, data_sources)
-    sc.add_diagnoses_features(diagnoses_df)
-    sc.add_test_results_features(lab_tests_df)
-    sc.add_drugs_features(drugs_df)
-    sc.patients_df.drop('birth_year', axis=1, inplace=True)
-    feature_scores = sc.calculate_similarity_per_feature()
+    sources = [Diagnosis(diagnoses_df, feature_weight_diagnosis),
+               LabResult(lab_tests_df, feature_weight_lab_result),
+               Drugs(drugs_df, feature_weight_drugs)]
 
-    return sc.calculate_ranked_distances(feature_scores)
+    transformed_patients_df = pd.concat([data_source.add_features(patients_df) for data_source in sources], axis=1)
+
+    sc = SimilarityCalculator(patients_df)
+
+    ranked_distances = sc.calculate_ranked_distances(transformed_patients_df)
+    max_similar_patients = max_similar_patients if isinstance(max_similar_patients, int) else len(ranked_distances)
+    print (max_similar_patients)
+    print (ranked_distances)
+    return ranked_distances.head(max_similar_patients + 1)
 
 
 def get_data_by_id(group_num: int, patient_id: int, sheet_name):
@@ -84,5 +87,5 @@ def get_shared_categories(df, patient_ids, col_name, frequency_factor=100):
 if __name__ == '__main__':
     group_num = 1
 
-    distances = get_distance_score_by_group(1)['distance']
+    distances = get_distance_score_by_group(1, 0.33, 0.33, 0)['distance']
     print(distances)
